@@ -1,0 +1,67 @@
+<%-
+#require 'pp'
+#STDERR.puts PP.pp(@data, "")
+-%>
+<%-
+fwdata = @data['v4']
+
+tables = fwdata.keys.sort
+tables.each { |table|
+-%>
+*<%= table %>
+<%-
+chains = fwdata[table].keys.sort
+chains.each { |chain|
+  chdata = fwdata[table][chain]
+
+  # check, if chain was defined by resource, or just created by adding rules
+  if not chdata.has_key? 'defined' then
+    raise sprintf "You did not define chain '%s:%s' with iptables::chain::*. Cannot add rules to non-existent chain.", table, chain
+  end
+-%>
+:<%= chain %> <% if chdata.has_key? 'policy' then %><%= chdata['policy'] %><% else %>-<% end %> [0:0]
+<%- } -%>
+<%-
+chains.each { |chain|
+
+# show header for each chain
+-%>
+<%= sprintf "### rules for '%s:%s'", table, chain %>
+<%-
+  chdata = fwdata[table][chain]
+
+  # include chain comment in the header, if set
+  if chdata.has_key? 'comment' and chdata['comment'].length > 0 then %><%= "# " + chdata['comment'] + "\n" %><% end
+
+  # prepare & print rules for chain
+  if    chdata['type'] == 'open' then
+    # rules are in hash (command => comment) format
+    rules = chdata['rules']
+
+    # always sort by key, so we get consistent results each run
+    rules = rules.sort
+
+    # print all rules in immutable chain
+    rules.each { |rule, comment| -%>
+<%= "# " + comment %>
+<%= "-A " + chain + " " + rule %>
+<%- }
+    
+  elsif chdata['type'] == 'immutable' then
+    # rules are just as an array of commands
+    rules = chdata['rules_final']
+
+    # check if we did not mix immutable & open
+    if chdata.has_key? 'rules' then
+      raise sprintf "You are trying to dynamically add %d rule(s) to immutable chain '%s:%s'", chdata['rules'].length, table, chain
+    end
+
+    # print all rules in immutable chain
+    rules.each { |rule| -%>
+<%= "-A " + chain + " " + rule %>
+<%- }
+  end
+-%>
+<%- } -%>
+COMMIT
+<%- } -%>
