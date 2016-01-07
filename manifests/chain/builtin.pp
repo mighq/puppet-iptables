@@ -1,6 +1,6 @@
 define iptables::chain::builtin(
-  $policy,
-  $rules = [],
+  $policy  = 'ACCEPT',
+  $rules   = [],
   $comment = undef,
 ) {
   include iptables::params
