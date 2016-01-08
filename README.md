@@ -6,9 +6,11 @@ Flexible iptables management by puppet.
 
 Based on concept of "immutable" and "open" chains.
 
-### immutable
+### immutable / builtin
 
 Chain, which is defined at once, on one place in catalogue. The order of rules is fixed. Cannot be changed later in catalogue.
+
+Builtin chains also have default policy attribute, they are like immutable otherwise.
 
 ### open
 
@@ -70,4 +72,5 @@ Chain defined without rules in it. Rules can be added from multiple places in ca
 
 ## Known problems
 * does not sync definition file with runtime settings in the kernel, only on file refresh
+* support for IPv4 only
 * will be addressed in the future
