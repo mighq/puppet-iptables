@@ -6,9 +6,21 @@ class iptables() {
     target_field    => 'content',
   }
   ->
+  package { 'iptables':
+    ensure => present,
+  }
+  ->
   file { '/etc/sysconfig/iptables':
     ensure  => present,
   }
+  ->
+  service { 'iptables':
+    ensure  => running,
+    enable  => true,
+  }
+ 
+   
+  File['/etc/sysconfig/iptables']
   ~>
   exec { 'apply iptables definition':
     command     => '/sbin/iptables-restore < /etc/sysconfig/iptables',
