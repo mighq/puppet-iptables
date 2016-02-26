@@ -1,6 +1,9 @@
 <%-
 #require 'pp'
 #STDERR.puts PP.pp(@data, "")
+#
+# TODO: do not generate chains, which are empty and not referenced
+#       support param to force even empty chains
 -%>
 <%-
 fwdata = @data['v4']
