@@ -11,15 +11,14 @@ class iptables() {
   }
   ->
   file { '/etc/sysconfig/iptables':
-    ensure  => present,
+    ensure => present,
   }
   ->
   service { 'iptables':
-    ensure  => running,
-    enable  => true,
+    ensure => running,
+    enable => true,
   }
- 
-   
+
   File['/etc/sysconfig/iptables']
   ~>
   exec { 'apply iptables definition':
