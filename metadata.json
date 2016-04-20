@@ -1,6 +1,6 @@
 {
   "name": "mighq-iptables",
-  "version": "0.2",
+  "version": "0.2.0",
   "license": "Apache-2.0",
   "author": "contact@mighq.net",
   "summary": "Flexible iptables management",
