@@ -1,0 +1,115 @@
+#!/bin/bash
+
+function fail() {
+  local msg="${1:-error occured}"
+
+  echo "${msg}" >&2
+  exit 1
+}
+
+function usage() {
+  echo "Usage: ${BASH_SOURCE[0]} -d DEFINITION_FILE"
+}
+
+function load_firewall_definition() {
+  local def_file="$1"
+
+  /sbin/iptables-restore < "${def_file}"
+}
+
+function create_clean_firewall() {
+  local def_file="$1"
+
+  cat > "${def_file}" << EOF
+*filter
+:FORWARD ACCEPT [0:0]
+:INPUT ACCEPT [0:0]
+:OUTPUT ACCEPT [0:0]
+COMMIT
+*mangle
+:FORWARD ACCEPT [0:0]
+:INPUT ACCEPT [0:0]
+:OUTPUT ACCEPT [0:0]
+:POSTROUTING ACCEPT [0:0]
+:PREROUTING ACCEPT [0:0]
+COMMIT
+*nat
+:OUTPUT ACCEPT [0:0]
+:POSTROUTING ACCEPT [0:0]
+:PREROUTING ACCEPT [0:0]
+COMMIT
+*raw
+:PREROUTING ACCEPT [0:]
+:OUTPUT ACCEPT [0:0]
+COMMIT
+EOF
+}
+
+function main() {
+  # defaults
+  local definition_file=''
+  local candidate_file=''
+
+  # process args
+  while getopts ":c:d:h" opt; do
+    case $opt in
+      h)
+        usage
+        exit 0
+        ;;
+      c)
+        candidate_file="${OPTARG}"
+        ;;
+      d)
+        definition_file="${OPTARG}"
+        ;;
+      \?)
+        fail "Invalid option: -${OPTARG}"
+        ;;
+    esac
+  done
+
+  shift ${OPTIND}
+
+  # check args
+  [ -n "${definition_file}" ] || fail "$(usage)"
+  [ -n "${candidate_file}"  ] || fail "$(usage)"
+  [ -f "${candidate_file}" ]  || fail "file '${candidate_file}' does not exist"
+
+  # make sure some valid configuration already exists
+  if ! [ -f "${definition_file}" ]; then
+    # if nothing was used before, create clean permissive firewall
+    create_clean_firewall "${definition_file}"
+  fi
+
+  # try loading firewall from candidate file
+  if load_firewall_definition "${candidate_file}"; then
+    # success loading candidate
+
+    # mark the definition as correct
+    cp --force "${candidate_file}" "${definition_file}"
+  else
+    # error restoring
+
+    # load original (with good faith assuming, that it is ok)
+    if load_firewall_definition "${definition_file}"; then
+      # but say, that we did not do, what we meant to do in the first place
+      fail "problem in the candidate file, restoring original definition"
+    else
+      # even the previous definition file failed to load successfuly
+
+      # fallback to clean permissive firewall, overriding invalid definition file
+      create_clean_firewall    "${definition_file}"
+      load_firewall_definition "${definition_file}"
+
+      fail "problem with both candidate and previous definition file, falling back to clean permissive firewall"
+    fi
+  fi
+
+  # check the result
+  if ! cmp --silent "${definition_file}" "${candidate_file}" ; then
+    fail "for some reason we failed to sync candidate and actual definition file"
+  fi
+}
+
+main "$@"

@@ -6,4 +6,8 @@ class iptables::params() {
     filter => ['INPUT', 'FORWARD', 'OUTPUT'],
   }
   $targets = ['ACCEPT', 'DROP']
+
+  $sync_script = 'iptables_sync'
+
+  $definition_file = '/etc/sysconfig/iptables'
 }
