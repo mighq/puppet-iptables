@@ -27,17 +27,16 @@ chains.each { |chain|
 <%- } -%>
 <%-
 chains.each { |chain|
-
-# show header for each chain
--%>
-<%= sprintf "### rules for '%s:%s'", table, chain %>
-<%-
   chdata = fwdata[table][chain]
 
-  # include chain comment in the header, if set
-  if chdata.has_key? 'comment' and chdata['comment'].length > 0 then %><%= "# " + chdata['comment'] + "\n" %><% end
+    (chdata['type'] == 'builtin'   and chdata['jumps'].length > 0) \
+      or \
+    (chdata['type'] == 'open'      and chdata['rules'].length > 0) \
+      or \
+    (chdata['type'] == 'immutable' and chdata['rules_final'].length > 0) \
 
   # prepare & print rules for chain
+
   if    chdata['type'] == 'open' then
     # rules are in hash (command => comment) format
     rules = chdata['rules']
@@ -45,15 +44,72 @@ chains.each { |chain|
     # always sort by key, so we get consistent results each run
     rules = rules.sort
 
+    # header
+    if chdata['rules'].length > 0 then
+-%>
+<%=   sprintf "### rules for '%s:%s' (open)", table, chain %>
+<%-
+      if chdata.has_key? 'comment' and chdata['comment'].length > 0 then %><%= "# " + chdata['comment'] + "\n" %><% end
+    end
+
     # print all rules in immutable chain
     rules.each { |rule, comment| -%>
-<%= "# " + comment %>
-<%= "-A " + chain + " " + rule %>
-<%- }
-    
+<%=   "# " + comment %>
+<%=   "-A " + chain + " " + rule %>
+<%-
+    }
+
+  elsif chdata['type'] == 'builtin' then
+    # check if we did not mix builtin & open
+    if chdata.has_key? 'rules' then
+      raise sprintf "You are trying to dynamically add %d rule(s) to builtin chain '%s:%s'", chdata['rules'].length, table, chain
+    end
+
+    # validate jump items
+    jumps = []
+    chdata['jumps'].each { |jump|
+      # check if jump target is known
+      if not chains.include? jump then
+        raise sprintf "You are trying to reference non-existing chain '%s' from builtin chain '%s:%s'", jump, table, chain
+      end
+
+      # only use jump, if there is anything to evaluate in target chain
+      # ignore otherwise
+      if \
+        (fwdata[table][jump]['type'] == 'open'      and fwdata[table][jump]['rules'].length > 0) \
+          or
+        (fwdata[table][jump]['type'] == 'immutable' and fwdata[table][jump]['rules_final'].length > 0) \
+      then
+        jumps.push(jump)
+      end
+    }
+
+    # header
+    if jumps.length > 0 then
+-%>
+<%=   sprintf "### jumps for '%s:%s' (builtin)", table, chain %>
+<%-
+      if chdata.has_key? 'comment' and chdata['comment'].length > 0 then %><%= "# " + chdata['comment'] + "\n" %><% end
+    end
+
+    # print all rules in immutable chain
+    jumps.each { |jump|
+-%>
+<%=   "-A " + chain + " -j " + jump %>
+<%-
+    }
+   
   elsif chdata['type'] == 'immutable' then
     # rules are just as an array of commands
     rules = chdata['rules_final']
+
+    # header
+    if rules.length > 0 then
+-%>
+<%=   sprintf "### rules for '%s:%s' (immutable)", table, chain %>
+<%-
+      if chdata.has_key? 'comment' and chdata['comment'].length > 0 then %><%= "# " + chdata['comment'] + "\n" %><% end
+    end
 
     # check if we did not mix immutable & open
     if chdata.has_key? 'rules' then
@@ -62,7 +118,7 @@ chains.each { |chain|
 
     # print all rules in immutable chain
     rules.each { |rule| -%>
-<%= "-A " + chain + " " + rule %>
+<%=   "-A " + chain + " " + rule %>
 <%- }
   end
 -%>

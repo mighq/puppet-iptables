@@ -1,7 +1,7 @@
 define iptables::chain::builtin(
   $policy  = 'ACCEPT',
-  $rules   = [],
-  $comment = undef,
+  $jumps   = [],
+  $comment = '',
 ) {
   include iptables::params
 
@@ -25,21 +25,20 @@ define iptables::chain::builtin(
     fail("invalid policy '${policy}'")
   }
 
-  datacat_fragment { "fw/v4/chain/builtin/${title}":
-    target => 'firewall_ipv4',
+  datacat_fragment { "${::iptables::params::datacat_structure}/chain/builtin/${title}":
+    target => $::iptables::params::datacat_structure,
     data   => {
       v4 => {
         "${table}" => {
           "${chain}" => {
-            policy => $policy
+            defined => true,
+            type    => 'builtin',
+            policy  => $policy,
+            jumps   => $jumps,
+            comment => $comment,
           }
         }
       }
     }
-  }
-
-  iptables::chain::immutable { $title:
-    rules   => $rules,
-    comment => $comment,
   }
 }

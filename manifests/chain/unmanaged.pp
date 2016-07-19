@@ -1,4 +1,4 @@
-define iptables::chain::open(
+define iptables::chain::unmanaged(
   $comment = '',
 ) {
   include iptables::params
@@ -11,13 +11,13 @@ define iptables::chain::open(
   $table = $parts[0]
   $chain = $parts[1]
 
-  datacat_fragment { "${::iptables::params::datacat_structure}/chain/open/${title}":
+  datacat_fragment { "${::iptables::params::datacat_structure}/chain/unmanaged/${title}":
     target => $::iptables::params::datacat_structure,
     data   => {
       v4 => {
         "${table}" => {
           "${chain}" => {
-            type    => 'open',
+            type    => 'unmanaged',
             rules   => {},
             comment => $comment,
             defined => true,
@@ -26,4 +26,16 @@ define iptables::chain::open(
       }
     }
   }
+
+  datacat_fragment { "${::iptables::params::datacat_umc}/${title}":
+    target => $::iptables::params::datacat_umc,
+    data   => {
+      v4 => {
+        "${table}" => {
+          "${chain}" => true,
+        }
+      }
+    }
+  }
+
 }

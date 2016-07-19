@@ -8,13 +8,53 @@ function fail() {
 }
 
 function usage() {
-  echo "Usage: ${BASH_SOURCE[0]} -d DEFINITION_FILE"
+  echo "Usage: ${BASH_SOURCE[0]} -d DEFINITION_FILE -c CANDIDATE_FILE -u UNMANAGED_CHAINS_FILE"
 }
 
 function load_firewall_definition() {
   local def_file="$1"
+  local unmanaged_chains_file="${2:-}"
 
+  local tmpf=''
+
+  if [ -n "${unmanaged_chains_file}" ]; then
+    # create state dump of rules in chains specified as config file
+
+    tmpf=$(mktemp)
+
+    # load what needs to be done from config file
+    local cfg_data=$(cat "${unmanaged_chains_file}" | sed -e 's/#.*$//' | sed -e '/^[[:space:]]*$/d')
+
+    # foreach table
+    for table in $(echo "${cfg_data}" | cut -d';' -f1); do
+      # foreach chain inside that table
+      for chain in $(echo "${cfg_data}" | grep "^${table};" | cut -d';' -f2); do
+        # store rules in that chain to file
+        iptables-save --table ${table} | grep "^-A ${chain} " | sed -e "s/^/iptables --table ${table} /" >> "${tmpf}"
+      done
+    done
+  fi
+
+  # restore definition
   /sbin/iptables-restore < "${def_file}"
+  result=$?
+
+  if [ ${result} -eq 0 ]; then
+    # if it went fine
+
+    # restore saved state from unmanaged rules
+    if [ -n "${unmanaged_chains_file}" ]; then
+      bash "${tmpf}"
+    fi
+  fi
+
+  # cleanup possible temp files
+  if [ -n "${tmpf}" ]; then
+    rm -f "${tmpf}"
+  fi
+
+  # return how it went during iptables-restore
+  return ${result}
 }
 
 function create_clean_firewall() {
@@ -49,9 +89,10 @@ function main() {
   # defaults
   local definition_file=''
   local candidate_file=''
+  local unmanaged_file=''
 
   # process args
-  while getopts ":c:d:h" opt; do
+  while getopts ":c:d:hu:" opt; do
     case $opt in
       h)
         usage
@@ -62,6 +103,9 @@ function main() {
         ;;
       d)
         definition_file="${OPTARG}"
+        ;;
+      u)
+        unmanaged_file="${OPTARG}"
         ;;
       \?)
         fail "Invalid option: -${OPTARG}"
@@ -74,25 +118,36 @@ function main() {
   # check args
   [ -n "${definition_file}" ] || fail "$(usage)"
   [ -n "${candidate_file}"  ] || fail "$(usage)"
-  [ -f "${candidate_file}" ]  || fail "file '${candidate_file}' does not exist"
+  [ -n "${unmanaged_file}"  ] || fail "$(usage)"
 
-  # make sure some valid configuration already exists
+  [ -f "${candidate_file}" ]  || fail "file '${candidate_file}' does not exist"
+  [ -f "${unmanaged_file}" ]  || fail "file '${unmanaged_file}' does not exist"
+
+  # make sure some previous (assuming valid) configuration already exists
   if ! [ -f "${definition_file}" ]; then
     # if nothing was used before, create clean permissive firewall
     create_clean_firewall "${definition_file}"
   fi
 
+  # make sure empty fallback umc file exists
+  if ! [ -f "${unmanaged_file}.fallback" ]; then
+    touch "${unmanaged_file}.fallback"
+  fi
+
   # try loading firewall from candidate file
-  if load_firewall_definition "${candidate_file}"; then
+  if load_firewall_definition "${candidate_file}" "${unmanaged_file}"; then
     # success loading candidate
 
     # mark the definition as correct
     cp --force "${candidate_file}" "${definition_file}"
+
+    # save definition for later use
+    cp --force "${unmanaged_file}" "${unmanaged_file}.fallback"
   else
     # error restoring
 
     # load original (with good faith assuming, that it is ok)
-    if load_firewall_definition "${definition_file}"; then
+    if load_firewall_definition "${definition_file}" "${unmanaged_file}.fallback"; then
       # but say, that we did not do, what we meant to do in the first place
       fail "problem in the candidate file, restoring original definition"
     else
