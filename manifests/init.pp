@@ -1,3 +1,9 @@
+# class for managing iptables firewall ruleset
+#
+# Warning:
+# * if you don't specify any structure, just include this class
+#   script won't do any changes to current firewall\
+#   (like running iptables-restore on empty file)
 class iptables() {
   include iptables::params
 
