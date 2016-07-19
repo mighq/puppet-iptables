@@ -16,6 +16,10 @@ Builtin chains also have default policy attribute, they are like immutable other
 
 Chain defined without rules in it. Rules can be added from multiple places in catalogue. Order of rules does not matter.
 
+### unmanaged
+
+Chain which is defined to be created and can be referenced, but puppet will ignore its contents. Good for chains, which are managed by some other software (ie. docker).
+
 ## Example usage
 
     # manage iptables
@@ -24,8 +28,8 @@ Chain defined without rules in it. Rules can be added from multiple places in ca
     # define structure of input rules
     iptables::chain::builtin { 'filter:INPUT':
       policy => 'DROP',
-      rules => [
-        '-j SERVICES',
+      jumps  => [
+        'SERVICES',
       ],
     }
 
@@ -37,8 +41,8 @@ Chain defined without rules in it. Rules can be added from multiple places in ca
     # define structure of NAT rules
     iptables::chain::builtin { 'nat:PREROUTING':
       policy => 'ACCEPT',
-      rules => [
-        '-j LOAD_BALANCE',
+      jumps  => [
+        'LOAD_BALANCE',
       ],
     }
 
@@ -73,4 +77,3 @@ Chain defined without rules in it. Rules can be added from multiple places in ca
 ## Known problems
 * does not sync definition file with runtime settings in the kernel, only on file refresh
 * support for IPv4 only
-* will be addressed in the future
