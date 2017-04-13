@@ -30,13 +30,13 @@ function load_firewall_definition() {
       # foreach chain inside that table
       for chain in $(echo "${cfg_data}" | grep "^${table};" | cut -d';' -f2); do
         # store rules in that chain to file
-        /sbin/iptables-save --table ${table} | grep "^-A ${chain} " | sed -e "s/^/iptables --table ${table} /" >> "${tmpf}"
+        iptables-save --table ${table} | grep "^-A ${chain} " | sed -e "s/^/iptables --table ${table} /" >> "${tmpf}"
       done
     done
   fi
 
   # restore definition
-  /sbin/iptables-restore < "${def_file}"
+  iptables-restore < "${def_file}"
   result=$?
 
   if [ ${result} -eq 0 ]; then

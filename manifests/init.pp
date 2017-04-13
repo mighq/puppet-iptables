@@ -56,7 +56,7 @@ class iptables() {
 
     # run if candidate (managed) and the validate file are out of sync
     unless  => "cmp ${definition_file} ${definition_file}.candidate",
-    path    => ['/bin', '/usr/bin'],
+    path    => ['/bin', '/usr/bin', '/sbin', '/usr/sbin'],
   }
 
   File["${definition_file}.umc"]                           -> Exec['apply iptables definition']
