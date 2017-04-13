@@ -36,7 +36,7 @@ function load_firewall_definition() {
   fi
 
   # restore definition
-  /sbin/iptables-restore < "${def_file}"
+  iptables-restore < "${def_file}"
   result=$?
 
   if [ ${result} -eq 0 ]; then
