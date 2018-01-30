@@ -29,12 +29,6 @@ chains.each { |chain|
 chains.each { |chain|
   chdata = fwdata[table][chain]
 
-    (chdata['type'] == 'builtin'   and chdata['jumps'].length > 0) \
-      or \
-    (chdata['type'] == 'open'      and chdata['rules'].length > 0) \
-      or \
-    (chdata['type'] == 'immutable' and chdata['rules_final'].length > 0) \
-
   # prepare & print rules for chain
 
   if    chdata['type'] == 'open' then
