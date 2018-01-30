@@ -69,10 +69,12 @@ chains.each { |chain|
 
       # only use jump, if there is anything to evaluate in target chain
       # ignore otherwise
-      if \
-        (fwdata[table][jump]['type'] == 'open'      and fwdata[table][jump]['rules'].length > 0) \
+      if
+        (fwdata[table][jump]['type'] == 'open'      and fwdata[table][jump]['rules'].length > 0)
           or
-        (fwdata[table][jump]['type'] == 'immutable' and fwdata[table][jump]['rules_final'].length > 0) \
+        (fwdata[table][jump]['type'] == 'immutable' and fwdata[table][jump]['rules_final'].length > 0)
+          or
+        (fwdata[table][jump]['type'] == 'unmanaged')
       then
         jumps.push(jump)
       end
@@ -92,7 +94,7 @@ chains.each { |chain|
 <%=   "-A " + chain + " -j " + jump %>
 <%-
     }
-   
+
   elsif chdata['type'] == 'immutable' then
     # rules are just as an array of commands
     rules = chdata['rules_final']
