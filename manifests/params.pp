@@ -5,7 +5,7 @@ class iptables::params() {
     nat    => ['PREROUTING', 'POSTROUTING', 'OUTPUT'],
     filter => ['INPUT', 'FORWARD', 'OUTPUT'],
   }
-  $targets = ['ACCEPT', 'DROP']
+  $policies = ['ACCEPT', 'DROP']
 
   $sync_script = 'iptables_sync'
 

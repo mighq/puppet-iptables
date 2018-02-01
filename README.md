@@ -6,15 +6,17 @@ Flexible iptables management by puppet.
 
 Based on concept of "immutable" and "open" chains.
 
-### immutable / builtin
+### immutable
 
 Chain, which is defined at once, on one place in catalogue. The order of rules is fixed. Cannot be changed later in catalogue.
 
-Builtin chains also have default policy attribute, they are like immutable otherwise.
+Builtin chains also have default policy attribute.
 
 ### open
 
 Chain defined without rules in it. Rules can be added from multiple places in catalogue. Order of rules does not matter.
+
+Builtin chains also have default policy attribute.
 
 ### unmanaged
 
@@ -26,7 +28,7 @@ Chain which is defined to be created and can be referenced, but puppet will igno
     include iptables
 
     # define structure of input rules
-    iptables::chain::builtin { 'filter:INPUT':
+    iptables::chain::immutable { 'filter:INPUT':
       policy => 'DROP',
       jumps  => [
         'SERVICES',
@@ -34,12 +36,12 @@ Chain which is defined to be created and can be referenced, but puppet will igno
     }
 
     # we are not router, drop forwarding
-    iptables::chain::builtin { 'filter:FORWARD':
+    iptables::chain::immutable { 'filter:FORWARD':
       policy => 'DROP',
     }
 
     # define structure of NAT rules
-    iptables::chain::builtin { 'nat:PREROUTING':
+    iptables::chain::immutable { 'nat:PREROUTING':
       policy => 'ACCEPT',
       jumps  => [
         'LOAD_BALANCE',

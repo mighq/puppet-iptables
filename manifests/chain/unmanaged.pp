@@ -1,15 +1,17 @@
+# TODO: regex for name of the chain
 define iptables::chain::unmanaged(
   $comment = '',
+  $policy  = undef,
 ) {
-  include iptables::params
-
-  $parts = split($title, ':')
-  if $parts == '' or size($parts) < 2 {
-    fail("title of chain must contain table reference ('TABLE:CHAIN')")
+  iptables::func::verify_chain_id { $title:
+    policy => $policy,
   }
 
+  $parts = split($title, ':')
   $table = $parts[0]
   $chain = $parts[1]
+
+  include iptables::params
 
   datacat_fragment { "${::iptables::params::datacat_structure}/chain/unmanaged/${title}":
     target => $::iptables::params::datacat_structure,
@@ -20,6 +22,7 @@ define iptables::chain::unmanaged(
             type    => 'unmanaged',
             rules   => {},
             comment => $comment,
+            policy  => $policy,
             defined => true,
           }
         }

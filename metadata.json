@@ -1,10 +1,10 @@
 {
   "name": "mighq-iptables",
-  "version": "1.1.0",
+  "version": "2.0.0-alpha",
   "license": "Apache-2.0",
   "author": "contact@mighq.net",
-  "summary": "Flexible iptables management",
-  "description": "Highly customizable iptables management with simple concept of immutable and open chains.",
+  "summary": "Flexible iptables management bypassing the need for order specification",
+  "description": "Highly customizable iptables management based on concept of immutable, open and unmanaged chains.",
   "tags": ["iptables", "firewall"],
   "source": "https://github.com/mighq/puppet-iptables",
   "project_page": "https://github.com/mighq/puppet-iptables",
@@ -20,5 +20,11 @@
   "dependencies": [
     { "name": "puppetlabs-stdlib" },
     { "name": "richardc-datacat" }
+  ],
+  "requirements": [
+    {
+      "name": "puppet",
+      "version_requirement": ">=3.8.0 <4.0.0"
+    }
   ]
 }

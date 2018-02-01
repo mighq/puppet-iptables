@@ -2,7 +2,7 @@
 include iptables
 
 # define structure of input rules
-iptables::chain::builtin { 'filter:INPUT':
+iptables::chain::immutable { 'filter:INPUT':
   policy => 'DROP',
   rules => [
     '-j SERVICES',
@@ -10,12 +10,12 @@ iptables::chain::builtin { 'filter:INPUT':
 }
 
 # we are not router, drop forwarding
-iptables::chain::builtin { 'filter:FORWARD':
+iptables::chain::immutable { 'filter:FORWARD':
   policy => 'DROP',
 }
 
 # define structure of NAT rules
-iptables::chain::builtin { 'nat:PREROUTING':
+iptables::chain::immutable { 'nat:PREROUTING':
   policy => 'ACCEPT',
   rules => [
     '-j LOAD_BALANCE',
