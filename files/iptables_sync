@@ -1,14 +1,33 @@
 #!/bin/bash
 
-function fail() {
+function err_msg() {
   local msg="${1:-error occured}"
 
   echo "${msg}" >&2
+}
+
+function fail() {
+  local msg="${1:-error occured}"
+
+  err_msg "${msg}"
+
   exit 1
 }
 
 function usage() {
-  echo "Usage: ${BASH_SOURCE[0]} -d DEFINITION_FILE -c CANDIDATE_FILE -u UNMANAGED_CHAINS_FILE"
+  echo "Usage: ${BASH_SOURCE[0]} (-p/-r) -d DEFINITION_FILE -c CANDIDATE_FILE -f FALLBACK_FILE -u UNMANAGED_CHAINS_FILE"
+}
+
+function check_firewall_definition() {
+  local def_file="$1"
+
+  check_result=$(/sbin/iptables-restore --test "${def_file}" 2>&1)
+
+  if [ $? -ne 0 ]; then
+    err_msg "iptables definition in file '${def_file}' is either not well-formed or not valid"
+    err_msg "${check_result}"
+    return 1
+  fi
 }
 
 function load_firewall_definition() {
@@ -16,41 +35,60 @@ function load_firewall_definition() {
   local unmanaged_chains_file="${2:-}"
 
   local tmpf=''
+  local tmpf2=''
 
-  if [ -n "${unmanaged_chains_file}" ]; then
+  if ! check_firewall_definition "${def_file}"; then
+    err_msg "we won't even try applying invalid iptables file '${def_file}'"
+    return 1
+  fi
+
+  # The file can contain comments - do not attempt to generate the input for
+  # iptables-save unless there are some non-comment lines.
+  if [[ -n "${unmanaged_chains_file}" && $(grep -v '^#' "${unmanaged_chains_file}" | wc -l) -ne 0 ]]; then
     # create state dump of rules in chains specified as config file
 
     tmpf=$(mktemp)
+    tmpf2=$(mktemp)
 
     # load what needs to be done from config file
     local cfg_data=$(cat "${unmanaged_chains_file}" | sed -e 's/#.*$//' | sed -e '/^[[:space:]]*$/d')
 
     # foreach table
     for table in $(echo "${cfg_data}" | cut -d';' -f1 | sort -u); do
+      > "${tmpf}"
+      echo "*${table}" >> "${tmpf2}"
       # foreach chain inside that table
       for chain in $(echo "${cfg_data}" | grep "^${table};" | cut -d';' -f2); do
         # store rules in that chain to file
-        iptables-save --table ${table} | grep "^-A ${chain} " | sed -e "s/^/iptables --table ${table} /" >> "${tmpf}"
+        if [[ "$chain" =~ ^/.*/$ ]] ; then
+          chain_regex_stripped="${chain:1:$[ ${#chain}-2]}" # strips first and last character
+          /sbin/iptables-save --table ${table} | egrep "^(-A \<${chain_regex_stripped}\>|:${chain_regex_stripped} - )"  >> "${tmpf}"
+        else
+          /sbin/iptables-save --table ${table} | egrep "^-A ${chain} "                        >> "${tmpf}"
+        fi
       done
+      grep '^:' "${tmpf}" >> "${tmpf2}"  # chain creation comes first
+      grep '^-A' "${tmpf}" >> "${tmpf2}" # then their content
+      echo "COMMIT" >> "${tmpf2}"
     done
   fi
 
   # restore definition
-  iptables-restore < "${def_file}"
+  /sbin/iptables-restore < "${def_file}"
   result=$?
 
   if [ ${result} -eq 0 ]; then
     # if it went fine
 
     # restore saved state from unmanaged rules
-    if [ -n "${unmanaged_chains_file}" ]; then
-      bash "${tmpf}"
+    if [ -n "${tmpf2}" ]; then
+      iptables-restore --noflush < "${tmpf2}"
     fi
   fi
 
   # cleanup possible temp files
-  if [ -n "${tmpf}" ]; then
-    rm -f "${tmpf}"
+  if [ -n "${tmpf2}" ]; then
+    rm -f "${tmpf}" "${tmpf2}"
   fi
 
   # return how it went during iptables-restore
@@ -58,12 +96,21 @@ function load_firewall_definition() {
 }
 
 function create_clean_firewall() {
-  local def_file="$1"
+  local def_file="$2"
+
+  local pol=''
+  if   [ "$1" == "-p" ]; then
+    pol='ACCEPT'
+  elif [ "$1" == "-r" ]; then
+    pol='DROP'
+  else
+    fail "invalid ultimate policy"
+  fi
 
   cat > "${def_file}" << EOF
 *filter
-:FORWARD ACCEPT [0:0]
-:INPUT ACCEPT [0:0]
+:FORWARD ${pol} [0:0]
+:INPUT ${pol} [0:0]
 :OUTPUT ACCEPT [0:0]
 COMMIT
 *mangle
@@ -79,7 +126,7 @@ COMMIT
 :PREROUTING ACCEPT [0:0]
 COMMIT
 *raw
-:PREROUTING ACCEPT [0:]
+:PREROUTING ACCEPT [0:0]
 :OUTPUT ACCEPT [0:0]
 COMMIT
 EOF
@@ -90,9 +137,11 @@ function main() {
   local definition_file=''
   local candidate_file=''
   local unmanaged_file=''
+  local fallback_file=''
+  local fallback_policy=''
 
   # process args
-  while getopts ":c:d:hu:" opt; do
+  while getopts ":c:d:f:hpru:" opt; do
     case $opt in
       h)
         usage
@@ -104,6 +153,15 @@ function main() {
       d)
         definition_file="${OPTARG}"
         ;;
+      f)
+        fallback_file="${OPTARG}"
+        ;;
+      p)
+        fallback_policy="-p"
+        ;;
+      r)
+        fallback_policy="-r"
+        ;;
       u)
         unmanaged_file="${OPTARG}"
         ;;
@@ -113,28 +171,44 @@ function main() {
     esac
   done
 
-  shift ${OPTIND}
+  shift $((${OPTIND} - 1))
 
   # check args
   [ -n "${definition_file}" ] || fail "$(usage)"
   [ -n "${candidate_file}"  ] || fail "$(usage)"
   [ -n "${unmanaged_file}"  ] || fail "$(usage)"
+  [ -n "${fallback_file}"   ] || fail "$(usage)"
+  [ -n "${fallback_policy}" ] || fail "$(usage)"
 
   [ -f "${candidate_file}" ]  || fail "file '${candidate_file}' does not exist"
   [ -f "${unmanaged_file}" ]  || fail "file '${unmanaged_file}' does not exist"
+  [ -f "${fallback_file}"  ]  || fail "file '${fallback_file}' does not exist"
 
-  # make sure some previous (assuming valid) configuration already exists
-  if ! [ -f "${definition_file}" ]; then
-    # if nothing was used before, create clean permissive firewall
-    create_clean_firewall "${definition_file}"
+  # make sure fallback file is at least syntacticly valid
+  if ! check_firewall_definition "${fallback_file}"; then
+    fail "fallback file '${fallback_file}' is not usable, not touching anything"
   fi
 
-  # make sure empty fallback umc file exists
+  # make sure some previous configuration already exists
+  if ! [ -f "${definition_file}" ]; then
+    # if nothing was used before, use fallback definition
+    cp --force "${fallback_file}" "${definition_file}"
+  fi
+
+  # make sure at least empty fallback umc file exists
   if ! [ -f "${unmanaged_file}.fallback" ]; then
     touch "${unmanaged_file}.fallback"
   fi
 
-  # try loading firewall from candidate file
+  # try dry-run with candidate from puppet
+  if ! check_firewall_definition "${candidate_file}"; then
+    # roll-back candidate to runtime state, so it is retried again after puppet runs
+    /sbin/iptables-save > "${candidate_file}"
+
+    fail "candidate iptables definition from '${candidate_file}' is not usable, we are not touching runtime configuration"
+  fi
+
+  # try loading firewall from candidate file for real
   if load_firewall_definition "${candidate_file}" "${unmanaged_file}"; then
     # success loading candidate
 
@@ -144,20 +218,39 @@ function main() {
     # save definition for later use
     cp --force "${unmanaged_file}" "${unmanaged_file}.fallback"
   else
-    # error restoring
+    # error loading candidate
 
-    # load original (with good faith assuming, that it is ok)
+    # load previous (with good faith assuming, that it is ok)
     if load_firewall_definition "${definition_file}" "${unmanaged_file}.fallback"; then
+      # move candidate file to working def, so it will be modified time puppet runs
+      # beware of the unless-cmp in the puppet (so script is not run twice)
+      cp --force  "${definition_file}" "${candidate_file}"
+
       # but say, that we did not do, what we meant to do in the first place
       fail "problem in the candidate file, restoring original definition"
     else
       # even the previous definition file failed to load successfuly
 
-      # fallback to clean permissive firewall, overriding invalid definition file
-      create_clean_firewall    "${definition_file}"
-      load_firewall_definition "${definition_file}"
+      # try using fallback
+      if load_firewall_definition "${fallback_file}"; then
+        # move candidate file to fallback def, so it will be modified time puppet runs
+        # beware of the unless-cmp in the puppet (so script is not run twice)
+        cp --force  "${fallback_file}" "${candidate_file}"
+        cp --force  "${fallback_file}" "${definition_file}"
 
-      fail "problem with both candidate and previous definition file, falling back to clean permissive firewall"
+        # but say, that we did not do, what we meant to do in the first place
+        fail "problem with both candidate and previous definition file, falling back to fallback variant"
+      else
+        # nothing helped, use ultimate hard-coded clean firewall
+
+        create_clean_firewall ${fallback_policy} "${definition_file}"
+        create_clean_firewall ${fallback_policy} "${candidate_file}"
+
+        load_firewall_definition "${definition_file}"
+
+        # inform user about this case
+        fail "all custom firewall definitions failed to be applied, falling back to hard-coded policy (${fallback_policy})"
+      fi
     fi
   fi
 
@@ -166,5 +259,12 @@ function main() {
     fail "for some reason we failed to sync candidate and actual definition file"
   fi
 }
+
+if [ -n "${DEBUG:-}" ]; then
+  set -x
+fi
+
+set -e
+set -u
 
 main "$@"
