@@ -19,8 +19,14 @@
     }
   ],
   "dependencies": [
-    { "name": "puppetlabs-stdlib" },
-    { "name": "richardc-datacat" }
+    {
+      "name": "puppetlabs-stdlib",
+      "version_requirement": ">=4.1.0"
+    },
+    {
+      "name": "richardc-datacat",
+      "version_requirement": ">=0.6.1"
+    }
   ],
   "requirements": [
     {
